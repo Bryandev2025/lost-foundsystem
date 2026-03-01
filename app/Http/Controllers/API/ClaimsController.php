@@ -1,0 +1,148 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\API\Claims\StoreClaimRequest;
+use App\Http\Requests\API\Claims\ApproveClaimRequest;
+use App\Http\Requests\API\Claims\DenyClaimRequest;
+use App\Http\Requests\API\Claims\ReleaseClaimRequest;
+use App\Models\Claim;
+use App\Models\Item;
+use Illuminate\Http\Request;
+
+class ClaimsController extends Controller
+{
+    // Staff/Admin: list all claims
+    public function index(Request $request)
+    {
+        $claims = Claim::with([
+            'item:id,title,type,status',
+            'claimer:id,name,email,phone,role',
+            'reviewer:id,name,role',
+        ])
+            ->latest()
+            ->paginate(15);
+
+        return response()->json($claims);
+    }
+
+    // User: list own claims
+    public function myClaims(Request $request)
+    {
+        $claims = Claim::where('claimer_id', $request->user()->id)
+            ->with(['item:id,title,type,status'])
+            ->latest()
+            ->paginate(15);
+
+        return response()->json($claims);
+    }
+
+    public function store(StoreClaimRequest $request)
+    {
+        $user = $request->user();
+        $data = $request->validated();
+
+        $item = Item::findOrFail($data['item_id']);
+
+        // Basic safety checks
+        if ($item->status === 'archived') {
+            return response()->json(['message' => 'Item is archived and cannot be claimed.'], 422);
+        }
+
+        // prevent duplicate pending claims by same user for same item
+        $exists = Claim::where('item_id', $item->id)
+            ->where('claimer_id', $user->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->exists();
+
+        if ($exists) {
+            return response()->json(['message' => 'You already have an active claim for this item.'], 422);
+        }
+
+        $claim = Claim::create([
+            'item_id' => $item->id,
+            'claimer_id' => $user->id,
+            'status' => 'pending',
+            'proof_details' => $data['proof_details'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Claim submitted.',
+            'claim' => $claim->load(['item:id,title,type,status']),
+        ], 201);
+    }
+
+    public function show(Claim $claim)
+    {
+        return response()->json([
+            'claim' => $claim->load([
+                'item',
+                'claimer:id,name,email,phone,role',
+                'reviewer:id,name,role',
+            ]),
+        ]);
+    }
+
+    // Staff/Admin actions
+    public function approve(ApproveClaimRequest $request, Claim $claim)
+    {
+        if ($claim->status !== 'pending') {
+            return response()->json(['message' => 'Only pending claims can be approved.'], 422);
+        }
+
+        $claim->update([
+            'status' => 'approved',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'review_notes' => $request->validated()['review_notes'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Claim approved.',
+            'claim' => $claim->fresh(),
+        ]);
+    }
+
+    public function deny(DenyClaimRequest $request, Claim $claim)
+    {
+        if ($claim->status !== 'pending') {
+            return response()->json(['message' => 'Only pending claims can be denied.'], 422);
+        }
+
+        $claim->update([
+            'status' => 'denied',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'review_notes' => $request->validated()['review_notes'],
+        ]);
+
+        return response()->json([
+            'message' => 'Claim denied.',
+            'claim' => $claim->fresh(),
+        ]);
+    }
+
+    public function release(ReleaseClaimRequest $request, Claim $claim)
+    {
+        if ($claim->status !== 'approved') {
+            return response()->json(['message' => 'Only approved claims can be released.'], 422);
+        }
+
+        $claim->update([
+            'status' => 'released',
+            'reviewed_by' => $request->user()->id,
+            'reviewed_at' => now(),
+            'review_notes' => $request->validated()['review_notes'] ?? $claim->review_notes,
+            'released_at' => now(),
+        ]);
+
+        // Mark item as claimed (simple approach)
+        $claim->item()->update(['status' => 'claimed']);
+
+        return response()->json([
+            'message' => 'Item released to claimant.',
+            'claim' => $claim->fresh()->load('item'),
+        ]);
+    }
+}
