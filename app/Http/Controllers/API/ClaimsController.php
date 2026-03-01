@@ -10,6 +10,7 @@ use App\Http\Requests\API\Claims\ReleaseClaimRequest;
 use App\Models\Claim;
 use App\Models\Item;
 use Illuminate\Http\Request;
+use App\Services\Notification\NotificationService;
 
 class ClaimsController extends Controller
 {
@@ -88,7 +89,9 @@ class ClaimsController extends Controller
     public function approve(ApproveClaimRequest $request, Claim $claim)
     {
         if ($claim->status !== 'pending') {
-            return response()->json(['message' => 'Only pending claims can be approved.'], 422);
+            return response()->json([
+                'message' => 'Only pending claims can be approved.'
+            ], 422);
         }
 
         $claim->update([
@@ -98,12 +101,27 @@ class ClaimsController extends Controller
             'review_notes' => $request->validated()['review_notes'] ?? null,
         ]);
 
+        // Send notifications
+        $notification = new NotificationService();
+
+        $notification->sendEmail(
+            $claim->claimer,
+            'Claim Approved',
+            'Your claim for item "' . $claim->item->title . '" has been approved. Please visit the Lost and Found office to claim it.'
+        );
+
+        if ($claim->claimer->phone) {
+            $notification->sendSMS(
+                $claim->claimer,
+                'Lost & Found: Your claim for "' . $claim->item->title . '" is approved.'
+            );
+        }
+
         return response()->json([
             'message' => 'Claim approved.',
-            'claim' => $claim->fresh(),
+            'claim' => $claim->fresh()->load(['item', 'claimer', 'reviewer']),
         ]);
     }
-
     public function deny(DenyClaimRequest $request, Claim $claim)
     {
         if ($claim->status !== 'pending') {
