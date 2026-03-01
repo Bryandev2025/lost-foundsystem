@@ -7,6 +7,7 @@ use App\Models\Item;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use App\Services\Audit\ActivityLogger;
 
 class QrController extends Controller
 {
@@ -22,6 +23,14 @@ class QrController extends Controller
                 'qr_generated_at' => now(),
             ]);
         }
+
+        ActivityLogger::log(
+            $request->user()->id,
+            'QR_GENERATED',
+            'item',
+            $item->id,
+            ['qr_token' => $item->qr_token]
+        );
 
         return response()->json([
             'message' => 'QR ready.',

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\API\Matches\StoreMatchRequest;
 use App\Models\Item;
 use App\Models\MatchModel;
+use App\Services\Audit\ActivityLogger;
 
 class MatchesController extends Controller
 {
@@ -43,6 +44,14 @@ class MatchesController extends Controller
             'notes' => $data['notes'] ?? null,
             'matched_at' => now(),
         ]);
+
+        ActivityLogger::log(
+            $request->user()->id,
+            'ITEM_MATCHED',
+            'match',
+            $match->id,
+            ['lost_item_id' => $match->lost_item_id, 'found_item_id' => $match->found_item_id]
+        );
 
         // Update statuses for clarity
         $lost->update(['status' => 'matched']);

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use App\Services\Audit\ActivityLogger;
 
 class ReportsController extends Controller
 {
@@ -20,7 +21,7 @@ class ReportsController extends Controller
     {
         $type = $request->query('type');
         $status = $request->query('status');
-
+        ActivityLogger::log($request->user()->id, 'EXPORT_ITEMS_EXCEL', 'report', null, []);
         return Excel::download(new ItemsExport($type, $status), 'items.xlsx');
     }
 

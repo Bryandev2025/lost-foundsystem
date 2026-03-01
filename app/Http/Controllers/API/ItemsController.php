@@ -7,6 +7,7 @@ use App\Http\Requests\API\Items\StoreItemRequest;
 use App\Http\Requests\API\Items\UpdateItemRequest;
 use App\Models\Item;
 use Illuminate\Http\Request;
+use App\Services\Audit\ActivityLogger;
 
 class ItemsController extends Controller
 {
@@ -42,6 +43,14 @@ class ItemsController extends Controller
             'found_by' => $data['type'] === 'found' ? $request->user()->id : null,
         ]);
 
+        ActivityLogger::log(
+            $request->user()->id,
+            'ITEM_CREATED',
+            'item',
+            $item->id,
+            ['type' => $item->type, 'status' => $item->status]
+        );
+
         return response()->json([
             'message' => 'Item report created.',
             'item' => $item->load(['reporter:id,name,role', 'finder:id,name,role']),
@@ -73,6 +82,14 @@ class ItemsController extends Controller
 
         $item->update($data);
 
+        ActivityLogger::log(
+            $request->user()->id,
+            'ITEM_UPDATED',
+            'item',
+            $item->id,
+            ['changed' => array_keys($data)]
+        );
+
         return response()->json([
             'message' => 'Item updated.',
             'item' => $item->fresh()->load(['reporter:id,name,role', 'finder:id,name,role']),
@@ -92,6 +109,14 @@ class ItemsController extends Controller
         }
 
         $item->delete();
+
+        ActivityLogger::log(
+            $request->user()->id,
+            'ITEM_DELETED',
+            'item',
+            $item->id,
+            ['title' => $item->title, 'status' => $item->status]
+        );
 
         return response()->json(['message' => 'Item deleted.']);
     }

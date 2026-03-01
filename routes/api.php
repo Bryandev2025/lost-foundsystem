@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 
+//API/Log Controller
+use App\Http\Controllers\API\Logs\ActivityLogsController;
+
 //API/Import Controller
 use App\Http\Controllers\API\Imports\ImportsController;
 
@@ -147,4 +150,10 @@ Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
 
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::post('/imports/users', [ImportsController::class, 'importUsers']);
+});
+
+
+
+Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
+    Route::get('/logs/activity', [ActivityLogsController::class, 'index']);
 });

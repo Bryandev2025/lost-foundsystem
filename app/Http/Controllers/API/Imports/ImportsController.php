@@ -7,6 +7,7 @@ use App\Imports\ItemsImport;
 use App\Imports\UsersImport;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\Audit\ActivityLogger;
 
 class ImportsController extends Controller
 {
@@ -18,6 +19,7 @@ class ImportsController extends Controller
         ]);
 
         Excel::import(new ItemsImport($request->user()->id), $request->file('file'));
+        ActivityLogger::log($request->user()->id, 'IMPORT_ITEMS', 'import', null, []);
 
         return response()->json(['message' => 'Items imported successfully.']);
     }

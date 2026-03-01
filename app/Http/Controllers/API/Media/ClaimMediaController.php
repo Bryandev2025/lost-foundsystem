@@ -7,6 +7,7 @@ use App\Models\Claim;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Services\Audit\ActivityLogger;
 
 class ClaimMediaController extends Controller
 {
@@ -32,6 +33,14 @@ class ClaimMediaController extends Controller
         $path = $file->storeAs('claims', $filename, 'public');
 
         $claim->update(['proof_image_path' => $path]);
+
+        ActivityLogger::log(
+            $request->user()->id,
+            'CLAIM_PROOF_UPLOADED',
+            'claim',
+            $claim->id,
+            ['proof_image_path' => $claim->proof_image_path]
+        );
 
         return response()->json([
             'message' => 'Claim proof image uploaded.',

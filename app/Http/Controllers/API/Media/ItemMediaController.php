@@ -7,6 +7,7 @@ use App\Models\Item;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Services\Audit\ActivityLogger;
 
 class ItemMediaController extends Controller
 {
@@ -33,6 +34,14 @@ class ItemMediaController extends Controller
         $path = $file->storeAs('items', $filename, 'public');
 
         $item->update(['image_path' => $path]);
+
+        ActivityLogger::log(
+            $request->user()->id,
+            'ITEM_IMAGE_UPLOADED',
+            'item',
+            $item->id,
+            ['image_path' => $item->image_path]
+        );
 
         return response()->json([
             'message' => 'Item image uploaded.',

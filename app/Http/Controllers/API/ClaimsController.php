@@ -11,6 +11,7 @@ use App\Models\Claim;
 use App\Models\Item;
 use Illuminate\Http\Request;
 use App\Services\Notification\NotificationService;
+use App\Services\Audit\ActivityLogger;
 
 class ClaimsController extends Controller
 {
@@ -68,6 +69,14 @@ class ClaimsController extends Controller
             'proof_details' => $data['proof_details'] ?? null,
         ]);
 
+        ActivityLogger::log(
+            $request->user()->id,
+            'CLAIM_SUBMITTED',
+            'claim',
+            $claim->id,
+            ['item_id' => $claim->item_id]
+        );
+
         return response()->json([
             'message' => 'Claim submitted.',
             'claim' => $claim->load(['item:id,title,type,status']),
@@ -100,6 +109,14 @@ class ClaimsController extends Controller
             'reviewed_at' => now(),
             'review_notes' => $request->validated()['review_notes'] ?? null,
         ]);
+
+        ActivityLogger::log(
+            $request->user()->id,
+            'CLAIM_APPROVED',
+            'claim',
+            $claim->id,
+            ['item_id' => $claim->item_id, 'claimer_id' => $claim->claimer_id]
+        );
 
         // Send notifications
         $notification = new NotificationService();
@@ -135,6 +152,14 @@ class ClaimsController extends Controller
             'review_notes' => $request->validated()['review_notes'],
         ]);
 
+        ActivityLogger::log(
+            $request->user()->id,
+            'CLAIM_DENIED',
+            'claim',
+            $claim->id,
+            ['item_id' => $claim->item_id, 'claimer_id' => $claim->claimer_id]
+        );
+
         return response()->json([
             'message' => 'Claim denied.',
             'claim' => $claim->fresh(),
@@ -157,6 +182,14 @@ class ClaimsController extends Controller
 
         // Mark item as claimed (simple approach)
         $claim->item()->update(['status' => 'claimed']);
+
+        ActivityLogger::log(
+            $request->user()->id,
+            'CLAIM_RELEASED',
+            'claim',
+            $claim->id,
+            ['item_id' => $claim->item_id, 'claimer_id' => $claim->claimer_id]
+        );
 
         return response()->json([
             'message' => 'Item released to claimant.',
