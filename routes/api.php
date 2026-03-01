@@ -5,6 +5,11 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+//API/Media Controllers
+use App\Http\Controllers\API\Media\ItemMediaController;
+use App\Http\Controllers\API\Media\ClaimMediaController;
+use App\Http\Controllers\API\Media\QrController;
+
 
 //API/Auth Controllers
 use App\Http\Controllers\API\Auth\LoginController;
@@ -80,4 +85,27 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/matches', [MatchesController::class , 'store']);
         }
         );
+    });
+
+
+//API/Media Routes
+Route::prefix('media')->group(function () {
+    Route::post('/items/{item}/image', [ItemMediaController::class , 'uploadImage']);
+    Route::post('/claims/{claim}/proof-image', [ClaimMediaController::class , 'uploadProofImage']);
+});
+Route::middleware('auth:sanctum')->group(function () {
+
+    // Uploads (user can upload their own; staff/admin can assist)
+    Route::post('/items/{item}/image', [ItemMediaController::class , 'uploadImage']);
+    Route::post('/claims/{claim}/proof-image', [ClaimMediaController::class , 'uploadProofImage']);
+
+    // QR (staff/admin generates; png is viewable by authenticated users; scan staff/admin)
+    Route::middleware('role:staff,admin')->group(function () {
+            Route::post('/items/{item}/qr', [QrController::class , 'generate']);
+            Route::get('/scan/{token}', [QrController::class , 'scan']);
+        }
+        );
+
+        // QR image endpoint (keep inside auth; or you can make it public if you prefer)
+        Route::get('/items/{item}/qr.png', [QrController::class , 'png'])->name('items.qr.png');
     });
