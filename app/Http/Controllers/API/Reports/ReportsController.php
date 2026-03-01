@@ -29,7 +29,7 @@ class ReportsController extends Controller
     public function exportClaimsExcel(Request $request)
     {
         $status = $request->query('status');
-
+        ActivityLogger::log($request->user()->id, 'EXPORT_CLAIMS_EXCEL', 'report', null, []);
         return Excel::download(new ClaimsExport($status), 'claims.xlsx');
     }
 
@@ -45,12 +45,13 @@ class ReportsController extends Controller
 
         $items = $q->latest()->get();
 
+        ActivityLogger::log($request->user()->id, 'EXPORT_ITEMS_PDF', 'report', null, []);
         $pdf = Pdf::loadView('pdf.items-list', compact('items'));
         return $pdf->download('items-report.pdf');
     }
 
     // PRINT: Item sheet (includes image + QR)
-    public function printItem(Item $item)
+    public function printItem(Request $request, Item $item)
     {
         $item->load('reporter:id,name');
 
@@ -74,15 +75,17 @@ class ReportsController extends Controller
         // Cleanup is optional; you can keep it or delete it later via CRON
         // Storage::disk('local')->delete($tmpPath);
 
+        ActivityLogger::log($request->user()->id, 'PRINT_ITEM', 'item', $item->id, []);
         return $pdf->stream('item-' . $item->id . '.pdf');
     }
 
     // PRINT: Claim slip
-    public function printClaimSlip(Claim $claim)
+    public function printClaimSlip(Request $request, Claim $claim)
     {
         $claim->load(['item:id,title', 'claimer:id,name', 'reviewer:id,name']);
 
         $pdf = Pdf::loadView('pdf.claim-slip', compact('claim'));
+        ActivityLogger::log($request->user()->id, 'PRINT_CLAIM_SLIP', 'claim', $claim->id, []);
         return $pdf->stream('claim-' . $claim->id . '-slip.pdf');
     }
 }

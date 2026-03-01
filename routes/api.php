@@ -47,7 +47,7 @@ Route::get('/user', function (Request $request) {
 Route::prefix('auth')->group(function () {
 
     Route::post('/register', RegisterController::class);
-    Route::post('/login', LoginController::class);
+    Route::middleware('throttle:5,1')->post('/login', LoginController::class);
 
     Route::middleware('auth:sanctum')->group(
         function () {
@@ -103,16 +103,12 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 
-//API/Media Routes
-Route::prefix('media')->group(function () {
-    Route::post('/items/{item}/image', [ItemMediaController::class, 'uploadImage']);
-    Route::post('/claims/{claim}/proof-image', [ClaimMediaController::class, 'uploadProofImage']);
-});
 Route::middleware('auth:sanctum')->group(function () {
 
-    // Uploads (user can upload their own; staff/admin can assist)
+    // Uploads/Downloads
     Route::post('/items/{item}/image', [ItemMediaController::class, 'uploadImage']);
     Route::post('/claims/{claim}/proof-image', [ClaimMediaController::class, 'uploadProofImage']);
+    Route::get('/claims/{claim}/proof-image', [ClaimsController::class, 'downloadProof']);
 
     // QR (staff/admin generates; png is viewable by authenticated users; scan staff/admin)
     Route::middleware('role:staff,admin')->group(

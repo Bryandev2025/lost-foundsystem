@@ -10,6 +10,8 @@ use App\Http\Requests\API\Claims\ReleaseClaimRequest;
 use App\Models\Claim;
 use App\Models\Item;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\Services\Notification\NotificationService;
 use App\Services\Audit\ActivityLogger;
 
@@ -62,20 +64,24 @@ class ClaimsController extends Controller
             return response()->json(['message' => 'You already have an active claim for this item.'], 422);
         }
 
-        $claim = Claim::create([
-            'item_id' => $item->id,
-            'claimer_id' => $user->id,
-            'status' => 'pending',
-            'proof_details' => $data['proof_details'] ?? null,
-        ]);
+        $claim = DB::transaction(function () use ($item, $user, $data, $request) {
+            $claim = Claim::create([
+                'item_id' => $item->id,
+                'claimer_id' => $user->id,
+                'status' => 'pending',
+                'proof_details' => $data['proof_details'] ?? null,
+            ]);
 
-        ActivityLogger::log(
-            $request->user()->id,
-            'CLAIM_SUBMITTED',
-            'claim',
-            $claim->id,
-            ['item_id' => $claim->item_id]
-        );
+            ActivityLogger::log(
+                $request->user()->id,
+                'CLAIM_SUBMITTED',
+                'claim',
+                $claim->id,
+                ['item_id' => $claim->item_id]
+            );
+
+            return $claim;
+        });
 
         return response()->json([
             'message' => 'Claim submitted.',
@@ -85,6 +91,8 @@ class ClaimsController extends Controller
 
     public function show(Claim $claim)
     {
+        $this->authorize('view', $claim);
+
         return response()->json([
             'claim' => $claim->load([
                 'item',
@@ -94,9 +102,30 @@ class ClaimsController extends Controller
         ]);
     }
 
+    public function downloadProof(Claim $claim)
+    {
+        $this->authorize('view', $claim);
+
+        if (!$claim->proof_image_path || !Storage::disk('local')->exists($claim->proof_image_path)) {
+            return response()->json(['message' => 'Proof image not found.'], 404);
+        }
+
+        ActivityLogger::log(
+            request()->user()->id,
+            'VIEWED_PROOF_IMAGE',
+            'claim',
+            $claim->id,
+            ['claim_id' => $claim->id]
+        );
+
+        return Storage::disk('local')->download($claim->proof_image_path);
+    }
+
     // Staff/Admin actions
     public function approve(ApproveClaimRequest $request, Claim $claim)
     {
+        $this->authorize('updateStatus', $claim);
+
         if ($claim->status !== 'pending') {
             return response()->json([
                 'message' => 'Only pending claims can be approved.'
@@ -141,6 +170,8 @@ class ClaimsController extends Controller
     }
     public function deny(DenyClaimRequest $request, Claim $claim)
     {
+        $this->authorize('updateStatus', $claim);
+
         if ($claim->status !== 'pending') {
             return response()->json(['message' => 'Only pending claims can be denied.'], 422);
         }
@@ -168,28 +199,32 @@ class ClaimsController extends Controller
 
     public function release(ReleaseClaimRequest $request, Claim $claim)
     {
+        $this->authorize('updateStatus', $claim);
+
         if ($claim->status !== 'approved') {
             return response()->json(['message' => 'Only approved claims can be released.'], 422);
         }
 
-        $claim->update([
-            'status' => 'released',
-            'reviewed_by' => $request->user()->id,
-            'reviewed_at' => now(),
-            'review_notes' => $request->validated()['review_notes'] ?? $claim->review_notes,
-            'released_at' => now(),
-        ]);
+        DB::transaction(function () use ($claim, $request) {
+            $claim->update([
+                'status' => 'released',
+                'reviewed_by' => $request->user()->id,
+                'reviewed_at' => now(),
+                'review_notes' => $request->validated()['review_notes'] ?? $claim->review_notes,
+                'released_at' => now(),
+            ]);
 
-        // Mark item as claimed (simple approach)
-        $claim->item()->update(['status' => 'claimed']);
+            // Mark item as claimed
+            $claim->item()->update(['status' => 'claimed']);
 
-        ActivityLogger::log(
-            $request->user()->id,
-            'CLAIM_RELEASED',
-            'claim',
-            $claim->id,
-            ['item_id' => $claim->item_id, 'claimer_id' => $claim->claimer_id]
-        );
+            ActivityLogger::log(
+                $request->user()->id,
+                'CLAIM_RELEASED',
+                'claim',
+                $claim->id,
+                ['item_id' => $claim->item_id, 'claimer_id' => $claim->claimer_id]
+            );
+        });
 
         return response()->json([
             'message' => 'Item released to claimant.',

@@ -24,13 +24,13 @@ class ClaimMediaController extends Controller
             'image' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
         ]);
 
-        if ($claim->proof_image_path && Storage::disk('public')->exists($claim->proof_image_path)) {
-            Storage::disk('public')->delete($claim->proof_image_path);
+        if ($claim->proof_image_path && Storage::disk('local')->exists($claim->proof_image_path)) {
+            Storage::disk('local')->delete($claim->proof_image_path);
         }
 
         $file = $validated['image'];
         $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
-        $path = $file->storeAs('claims', $filename, 'public');
+        $path = $file->storeAs('claims', $filename, 'local');
 
         $claim->update(['proof_image_path' => $path]);
 
@@ -44,7 +44,7 @@ class ClaimMediaController extends Controller
 
         return response()->json([
             'message' => 'Claim proof image uploaded.',
-            'image_url' => asset('storage/' . $path),
+            'image_url' => url("/api/claims/{$claim->id}/proof-image"),
             'claim' => $claim->fresh(),
         ]);
     }

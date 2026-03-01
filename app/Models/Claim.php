@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Claim extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'item_id',
         'claimer_id',
@@ -31,11 +33,11 @@ class Claim extends Model
 
     public function claimer()
     {
-        return $this->belongsTo(User::class , 'claimer_id');
+        return $this->belongsTo(User::class, 'claimer_id');
     }
 
     public function reviewer()
     {
-        return $this->belongsTo(User::class , 'reviewed_by');
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 }

@@ -14,19 +14,51 @@ class ItemsController extends Controller
     // Staff/Admin can view all; User can view all (public feed) OR restrict later if you want.
     public function index(Request $request)
     {
-        $q = Item::query()->with(['reporter:id,name,role', 'finder:id,name,role']);
+        $query = Item::query()
+            ->with(['reporter:id,name,role', 'finder:id,name,role'])
+            ->latest();
 
-        // optional filters
-        if ($request->filled('type'))
-            $q->where('type', $request->string('type'));
-        if ($request->filled('status'))
-            $q->where('status', $request->string('status'));
-        if ($request->filled('category'))
-            $q->where('category', $request->string('category'));
+        // Filter: mine (only show user's own items)
+        if ($request->boolean('mine')) {
+            $query->where('reported_by', $request->user()->id);
+        }
 
-        $items = $q->latest()->paginate(15);
+        // Filter: type (lost/found)
+        if ($request->filled('type')) {
+            $query->where('type', $request->string('type'));
+        }
 
-        return response()->json($items);
+        // Filter: status (pending/matched/claimed/archived)
+        if ($request->filled('status')) {
+            $query->where('status', $request->string('status'));
+        }
+
+        // Filter: category
+        if ($request->filled('category')) {
+            $query->where('category', $request->string('category'));
+        }
+
+        // Search: q
+        if ($request->filled('q')) {
+            $q = trim((string) $request->input('q'));
+
+            $query->where(function ($sub) use ($q) {
+                $sub->where('title', 'like', "%{$q}%")
+                    ->orWhere('description', 'like', "%{$q}%")
+                    ->orWhere('location', 'like', "%{$q}%")
+                    ->orWhere('category', 'like', "%{$q}%")
+                    ->orWhere('brand', 'like', "%{$q}%")
+                    ->orWhere('color', 'like', "%{$q}%");
+            });
+        }
+
+        // Pagination
+        $perPage = (int) $request->query('per_page', 12);
+        $perPage = max(1, min($perPage, 50)); // limit 1-50
+
+        return response()->json(
+            $query->paginate($perPage)->withQueryString()
+        );
     }
 
     public function store(StoreItemRequest $request)
@@ -66,17 +98,12 @@ class ItemsController extends Controller
 
     public function update(UpdateItemRequest $request, Item $item)
     {
-        $user = $request->user();
+        $this->authorize('update', $item);
 
-        // Basic rule:
-        // - user can edit only their own item (and not status)
-        // - staff/admin can edit anything including status
+        $user = $request->user();
         $data = $request->validated();
 
         if ($user->role === 'user') {
-            if ($item->reported_by !== $user->id) {
-                return response()->json(['message' => 'Forbidden.'], 403);
-            }
             unset($data['status']); // users cannot change status
         }
 
@@ -98,15 +125,7 @@ class ItemsController extends Controller
 
     public function destroy(Request $request, Item $item)
     {
-        $user = $request->user();
-
-        // user can delete their own pending report; staff/admin can delete any
-        if ($user->role === 'user') {
-            if ($item->reported_by !== $user->id)
-                return response()->json(['message' => 'Forbidden.'], 403);
-            if ($item->status !== 'pending')
-                return response()->json(['message' => 'Only pending items can be deleted.'], 422);
-        }
+        $this->authorize('delete', $item);
 
         $item->delete();
 

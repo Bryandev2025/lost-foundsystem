@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Item extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'type', // lost|found
         'title',
@@ -31,12 +33,12 @@ class Item extends Model
     // Relationships
     public function reporter()
     {
-        return $this->belongsTo(User::class , 'reported_by');
+        return $this->belongsTo(User::class, 'reported_by');
     }
 
     public function finder()
     {
-        return $this->belongsTo(User::class , 'found_by');
+        return $this->belongsTo(User::class, 'found_by');
     }
 
     public function claims()
@@ -46,12 +48,12 @@ class Item extends Model
 
     public function lostMatches()
     {
-        return $this->hasMany(MatchModel::class , 'lost_item_id');
+        return $this->hasMany(MatchModel::class, 'lost_item_id');
     }
 
     public function foundMatches()
     {
-        return $this->hasMany(MatchModel::class , 'found_item_id');
+        return $this->hasMany(MatchModel::class, 'found_item_id');
     }
 
     // Optional helper scopes (nice for API filtering)
