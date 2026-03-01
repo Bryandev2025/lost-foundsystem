@@ -5,6 +5,12 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+
+//API/Import Controller
+use App\Http\Controllers\API\Imports\ImportsController;
+
+
+
 //API/Report Controller
 use App\Http\Controllers\API\Reports\ReportsController;
 
@@ -131,4 +137,14 @@ Route::middleware(['auth:sanctum', 'role:admin,staff'])->group(function () {
     // Print
     Route::get('/print/items/{item}', [ReportsController::class, 'printItem']);
     Route::get('/print/claims/{claim}/slip', [ReportsController::class, 'printClaimSlip']);
+});
+
+
+
+Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
+    Route::post('/imports/items', [ImportsController::class, 'importItems']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::post('/imports/users', [ImportsController::class, 'importUsers']);
 });
